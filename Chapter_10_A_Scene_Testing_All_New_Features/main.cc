@@ -11,6 +11,7 @@
 #include "constant_medium.h"
 
 #include <iostream>
+#include <omp.h>
 
 color ray_color(const ray& r, const color& background, const hittable& world, int recursion_depth)
 {
@@ -347,11 +348,16 @@ int main()
     camera cam(lookfrom, lookat, vup, vfov, aspect_ratio, aperture, dist_to_focus, 0.0, 1.0);
 
     // Render
-    std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+    // std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
     // The rows are written out from top to bottom
+    std::vector<std::vector<std::vector<int>>> pixels;
+    pixels.resize(image_height);
+    omp_set_num_threads(4);
     for (int j = image_height - 1; j >= 0; --j) {
         // The pixels are written out in rows with pixels left to right
+        pixels[j].resize(image_width);
         std::cerr << "\rScanlines remaining: " << j << ' ' << std::flush;
+#pragma omp parallel for
         for (int i = 0; i < image_width; ++i) {
             color pixel_color(0, 0, 0);
             for (int cnt = 0; cnt < samples_per_pixel; cnt++) {
@@ -360,9 +366,16 @@ int main()
                 ray r = cam.get_ray(u, v);
                 pixel_color += ray_color(r, background, world, max_recursion_depth);
             }
-            write_color(std::cout, pixel_color, samples_per_pixel);
+            pixels[j][i] = write_color(pixel_color, samples_per_pixel);
         }
     }
+
+    std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+    for (int j = image_height-1; j >= 0; --j) {
+        for (int i = 0; i < image_width; ++i)
+                std::cout << pixels[j][i][0] << ' ' << pixels[j][i][1] << ' ' << pixels[j][i][2] << std::endl;
+    }
+
     std::cerr << "\nDone.\n";
     return 0;
 }
